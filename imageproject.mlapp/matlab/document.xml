@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[classdef imageproject < matlab.apps.AppBase
+
+    % Properties that correspond to app components
+    properties (Access = public)
+        UIFigure                     matlab.ui.Figure
+        IntensitylevelSlicingButton  matlab.ui.control.Button
+        ContraststretchingButton     matlab.ui.control.Button
+        K_Zoom_Button                matlab.ui.control.Button
+        KvalueEditField              matlab.ui.control.NumericEditField
+        KvalueEditFieldLabel         matlab.ui.control.Label
+        SaveButton                   matlab.ui.control.Button
+        RGBtoGrayscaleButton         matlab.ui.control.Button
+        ClearButton                  matlab.ui.control.Button
+        LoadButton                   matlab.ui.control.Button
+        UIAxes_2                     matlab.ui.control.UIAxes
+        UIAxes                       matlab.ui.control.UIAxes
+    end
+
+    properties (Access = private)
+        OriginalImage
+        EnhancedImage 
+    end    
+
+    % Callbacks that handle component events
+    methods (Access = private)
+
+        % Button pushed function: LoadButton
+        function LoadButtonPushed(app, event)
+    filter = {'*.jpg;*.jpeg;*.png;*.bmp;*.tif', 'Image Files'};
+    [filename, pathname] = uigetfile(filter, 'Select an Image');
+    if isequal(filename, 0)
+        return;
+    end
+    full_path = fullfile(pathname, filename);
+    try
+        img = imread(full_path);        
+        app.OriginalImage = img;
+        app.EnhancedImage = img; 
+        imshow(app.OriginalImage, 'Parent', app.UIAxes);
+        title(app.UIAxes, 'Original');
+        cla(app.UIAxes_2); 
+        title(app.UIAxes_2, 'Enhanced');
+    catch ME
+        uialert(app.UIFigure, ME.message, 'Error Loading Image');
+    end
+        end
+
+        % Button pushed function: RGBtoGrayscaleButton
+        function RGBtoGrayscaleButtonPushed(app, event)
+        if isempty(app.OriginalImage)
+        uialert(app.UIFigure, 'Please load an image first!', 'Warning');
+        return;
+        end
+    [~, ~, channels] = size(app.OriginalImage);    
+    if channels == 3        
+        grayImg = rgb2gray(app.OriginalImage);        
+        app.EnhancedImage = grayImg;
+        imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+        title(app.UIAxes_2, 'Enhanced (Grayscale)');        
+    elseif channels == 1
+        uialert(app.UIFigure, 'Image is already grayscale!', 'Info');        
+    else
+        uialert(app.UIFigure, 'Image format not supported for this filter.', 'Error');
+    end
+        end
+
+        % Button pushed function: ClearButton
+        function ClearButtonPushed(app, event)
+    app.OriginalImage = [];
+    app.EnhancedImage = [];
+    cla(app.UIAxes); 
+    cla(app.UIAxes_2); 
+    title(app.UIAxes, 'Original');
+    title(app.UIAxes_2, 'Enhanced');
+        end
+
+        % Button pushed function: K_Zoom_Button
+        function K_Zoom_ButtonPushed(app, event)
+           if isempty(app. OriginalImage)
+        uialert(app.UIFigure, 'Please load an image first!', 'Warning');
+        return;
+    end
+    
+    % Get the K value from the input field
+    k = app.KvalueEditField.Value;
+    
+    % Validate K value
+    if k <= 0
+        uialert(app.UIFigure, 'K value must be greater than 0! ', 'Invalid Input');
+        return;
+    end
+    
+    try
+        % Zoom the original image by factor k
+        zoomedImg = imresize(app. OriginalImage, k, 'nearest');
+        
+        % Store and display the zoomed image
+        app.EnhancedImage = zoomedImg;
+        imshow(app. EnhancedImage, 'Parent', app.UIAxes_2);
+        title(app.UIAxes_2, sprintf('Enhanced (K-Zoom: %. 2fx)', k));
+        
+    catch ME
+        uialert(app.UIFigure, ME.message, 'Error During Zoom');
+    end
+        end
+
+        % Button pushed function: ContraststretchingButton
+        function ContraststretchingButtonPushed(app, event)
+            if isempty(app.EnhancedImage)
+        uialert(app.UIFigure, 'Please load an image first!', 'Warning');
+        return;
+            end    
+    current_img = app.EnhancedImage;    
+    [~, ~, channels] = size(current_img);    
+    if channels == 3
+        gray_img = rgb2gray(current_img);        
+    elseif channels == 1
+        gray_img = current_img;        
+    else
+        uialert(app.UIFigure, 'Image format not supported for contrast stretching.', 'Error');
+        return;
+    end
+    adjusted_img = imadjust(gray_img);
+    app.EnhancedImage = adjusted_img;
+    imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+    title(app.UIAxes_2, 'Enhanced (Contrast Stretched)');
+        end
+
+        % Button pushed function: IntensitylevelSlicingButton
+        function IntensitylevelSlicingButtonPushed(app, event)
+           if isempty(app.EnhancedImage)
+        uialert(app.UIFigure, 'Please load an image first!', 'Warning');
+        return;
+    end
+    
+    current_img = app.EnhancedImage;
+
+    % 1. التحقق من أن الصورة رمادية والتحويل إذا لزم الأمر
+    [~, ~, channels] = size(current_img);
+    if channels == 3
+        current_img = rgb2gray(current_img);
+    end
+    
+    % 2. قراءة قيم النطاق من حقول الإدخال
+    % ملاحظة هامة: يجب أن يكون لديك مكونات باسم L1_EditField و L2_EditField
+    try
+        L1 = app.L1_EditField.Value; % الحد الأدنى للنطاق
+        L2 = app.L2_EditField.Value; % الحد الأقصى للنطاق
+    catch
+        uialert(app.UIFigure, 'Input Error: Please ensure L1_EditField and L2_EditField are defined and contain values.', 'Error');
+        return;
+    end
+    
+    % 3. التحقق من صحة المدخلات
+    
+    % التأكد من أن L1 < L2 وأن القيم ضمن النطاق [0, 255]
+    if L1 >= L2 || L1 < 0 || L2 > 255
+        uialert(app.UIFigure, 'Invalid range. Ensure L1 < L2 and both are between 0 and 255.', 'Invalid Input');
+        return;
+    end
+    
+    % 4. تنفيذ تقطيع مستوى الشدة (بدون حفظ الخلفية - تسليط الضوء)
+    
+    % تحويل الصورة إلى نوع uint8 (نطاق 0-255)
+    I = uint8(current_img);
+    
+    % إنشاء مصفوفة منطقية (mask) حيث تكون البكسلات داخل النطاق صحيحة (True)
+    % سيتم اختيار البكسلات حيث (I أكبر من أو تساوي L1) AND (I أصغر من أو تساوي L2)
+    mask = (I >= L1) & (I <= L2);
+    
+    % إنشاء الصورة الناتجة، وتعيين كل البكسلات مبدئياً إلى الأسود (0)
+    sliced_img = zeros(size(I), 'uint8');
+    
+    % تعيين البكسلات الواقعة داخل النطاق (mask=True) إلى قيمة الشدة القصوى (الأبيض، 255)
+    sliced_img(mask) = 255;
+    
+    % 5. تحديث الصورة المحسّنة وعرضها
+    app.EnhancedImage = sliced_img;
+    imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+    title(app.UIAxes_2, ['Enhanced (Slicing L1:' num2str(L1) ' L2:' num2str(L2) ')']);
+        end
+    end
+
+    % Component initialization
+    methods (Access = private)
+
+        % Create UIFigure and components
+        function createComponents(app)
+
+            % Create UIFigure and hide until all components are created
+            app.UIFigure = uifigure('Visible', 'off');
+            app.UIFigure.Color = [0.149 0.549 0.8667];
+            app.UIFigure.Position = [100 100 888 480];
+            app.UIFigure.Name = 'MATLAB App';
+            app.UIFigure.Theme = 'light';
+
+            % Create UIAxes
+            app.UIAxes = uiaxes(app.UIFigure);
+            title(app.UIAxes, 'Original')
+            zlabel(app.UIAxes, 'Z')
+            app.UIAxes.Position = [183 182 300 185];
+
+            % Create UIAxes_2
+            app.UIAxes_2 = uiaxes(app.UIFigure);
+            title(app.UIAxes_2, 'Enhanced')
+            zlabel(app.UIAxes_2, 'Z')
+            app.UIAxes_2.Position = [539 182 300 185];
+
+            % Create LoadButton
+            app.LoadButton = uibutton(app.UIFigure, 'push');
+            app.LoadButton.ButtonPushedFcn = createCallbackFcn(app, @LoadButtonPushed, true);
+            app.LoadButton.FontWeight = 'bold';
+            app.LoadButton.Position = [29 215 118 119];
+            app.LoadButton.Text = 'Load';
+
+            % Create ClearButton
+            app.ClearButton = uibutton(app.UIFigure, 'push');
+            app.ClearButton.ButtonPushedFcn = createCallbackFcn(app, @ClearButtonPushed, true);
+            app.ClearButton.FontWeight = 'bold';
+            app.ClearButton.Position = [241 405 184 55];
+            app.ClearButton.Text = 'Clear';
+
+            % Create RGBtoGrayscaleButton
+            app.RGBtoGrayscaleButton = uibutton(app.UIFigure, 'push');
+            app.RGBtoGrayscaleButton.ButtonPushedFcn = createCallbackFcn(app, @RGBtoGrayscaleButtonPushed, true);
+            app.RGBtoGrayscaleButton.FontWeight = 'bold';
+            app.RGBtoGrayscaleButton.Position = [330 123 153 52];
+            app.RGBtoGrayscaleButton.Text = 'RGB to Grayscale';
+
+            % Create SaveButton
+            app.SaveButton = uibutton(app.UIFigure, 'push');
+            app.SaveButton.FontWeight = 'bold';
+            app.SaveButton.Position = [597 405 184 55];
+            app.SaveButton.Text = 'Save';
+
+            % Create KvalueEditFieldLabel
+            app.KvalueEditFieldLabel = uilabel(app.UIFigure);
+            app.KvalueEditFieldLabel.HorizontalAlignment = 'right';
+            app.KvalueEditFieldLabel.FontWeight = 'bold';
+            app.KvalueEditFieldLabel.Position = [539 138 48 22];
+            app.KvalueEditFieldLabel.Text = 'K value';
+
+            % Create KvalueEditField
+            app.KvalueEditField = uieditfield(app.UIFigure, 'numeric');
+            app.KvalueEditField.Tag = 'K_Input';
+            app.KvalueEditField.Position = [602 138 31 22];
+
+            % Create K_Zoom_Button
+            app.K_Zoom_Button = uibutton(app.UIFigure, 'push');
+            app.K_Zoom_Button.ButtonPushedFcn = createCallbackFcn(app, @K_Zoom_ButtonPushed, true);
+            app.K_Zoom_Button.FontWeight = 'bold';
+            app.K_Zoom_Button.Position = [644 123 153 52];
+            app.K_Zoom_Button.Text = 'K_Zoom_Button';
+
+            % Create ContraststretchingButton
+            app.ContraststretchingButton = uibutton(app.UIFigure, 'push');
+            app.ContraststretchingButton.ButtonPushedFcn = createCallbackFcn(app, @ContraststretchingButtonPushed, true);
+            app.ContraststretchingButton.FontWeight = 'bold';
+            app.ContraststretchingButton.Position = [54 123 153 52];
+            app.ContraststretchingButton.Text = 'Contrast stretching';
+
+            % Create IntensitylevelSlicingButton
+            app.IntensitylevelSlicingButton = uibutton(app.UIFigure, 'push');
+            app.IntensitylevelSlicingButton.ButtonPushedFcn = createCallbackFcn(app, @IntensitylevelSlicingButtonPushed, true);
+            app.IntensitylevelSlicingButton.FontWeight = 'bold';
+            app.IntensitylevelSlicingButton.Position = [54 43 153 52];
+            app.IntensitylevelSlicingButton.Text = 'Intensity-level Slicing';
+
+            % Show the figure after all components are created
+            app.UIFigure.Visible = 'on';
+        end
+    end
+
+    % App creation and deletion
+    methods (Access = public)
+
+        % Construct app
+        function app = imageproject
+
+            % Create UIFigure and components
+            createComponents(app)
+
+            % Register the app with App Designer
+            registerApp(app, app.UIFigure)
+
+            if nargout == 0
+                clear app
+            end
+        end
+
+        % Code that executes before app deletion
+        function delete(app)
+
+            % Delete UIFigure when app is deleted
+            delete(app.UIFigure)
+        end
+    end
+end]]></w:t></w:r></w:p></w:body></w:document>
