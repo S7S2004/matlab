@@ -360,8 +360,11 @@
                 % c is the scaling constant from slider
                 logTransformed = c * log(1 + current_img);
                 
-                % Normalize to [0, 1] range
-                logTransformed = logTransformed / max(logTransformed(:));
+                % Normalize to [0, 1] range (with protection against division by zero)
+                maxVal = max(logTransformed(:));
+                if maxVal > 0
+                    logTransformed = logTransformed / maxVal;
+                end
                 
                 % Convert back to uint8
                 app.EnhancedImage = im2uint8(logTransformed);
