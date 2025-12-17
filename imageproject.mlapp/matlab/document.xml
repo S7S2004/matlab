@@ -14,6 +14,17 @@
         LoadButton                   matlab.ui.control.Button
         UIAxes_2                     matlab.ui.control.UIAxes
         UIAxes                       matlab.ui.control.UIAxes
+        % New components for additional features
+        L1_EditField                 matlab.ui.control.NumericEditField
+        L1_EditFieldLabel            matlab.ui.control.Label
+        L2_EditField                 matlab.ui.control.NumericEditField
+        L2_EditFieldLabel            matlab.ui.control.Label
+        ZeroOrderZoomButton          matlab.ui.control.Button
+        FlipRotateButton             matlab.ui.control.Button
+        TransposeNegativeButton      matlab.ui.control.Button
+        NoiseRemovalButton           matlab.ui.control.Button
+        BrightnessSlider             matlab.ui.control.Slider
+        BrightnessSliderLabel        matlab.ui.control.Label
     end
 
     properties (Access = private)
@@ -179,6 +190,190 @@
     imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
     title(app.UIAxes_2, ['Enhanced (Slicing L1:' num2str(L1) ' L2:' num2str(L2) ')']);
         end
+
+        % Button pushed function: SaveButton
+        function SaveButtonPushed(app, event)
+            if isempty(app.EnhancedImage)
+                uialert(app.UIFigure, 'No enhanced image to save!', 'Warning');
+                return;
+            end
+            
+            [filename, pathname] = uiputfile({'*.png', 'PNG Image'; ...
+                                              '*.jpg', 'JPEG Image'; ...
+                                              '*.bmp', 'BMP Image'; ...
+                                              '*.tif', 'TIFF Image'}, ...
+                                              'Save Enhanced Image');
+            if isequal(filename, 0)
+                return;
+            end
+            
+            full_path = fullfile(pathname, filename);
+            try
+                imwrite(app.EnhancedImage, full_path);
+                uialert(app.UIFigure, ['Image saved successfully to: ' full_path], 'Success');
+            catch ME
+                uialert(app.UIFigure, ME.message, 'Error Saving Image');
+            end
+        end
+
+        % Button pushed function: ZeroOrderZoomButton
+        function ZeroOrderZoomButtonPushed(app, event)
+            if isempty(app.OriginalImage)
+                uialert(app.UIFigure, 'Please load an image first!', 'Warning');
+                return;
+            end
+            
+            k = app.KvalueEditField.Value;
+            if k <= 0
+                uialert(app.UIFigure, 'K value must be greater than 0!', 'Invalid Input');
+                return;
+            end
+            
+            try
+                % Zero-order hold (nearest neighbor) zooming implementation
+                [rows, cols, channels] = size(app.OriginalImage);
+                newRows = round(rows * k);
+                newCols = round(cols * k);
+                
+                % Create output image
+                zoomedImg = zeros(newRows, newCols, channels, class(app.OriginalImage));
+                
+                % Zero-order hold interpolation (repeat pixels)
+                for i = 1:newRows
+                    for j = 1:newCols
+                        origRow = ceil(i / k);
+                        origCol = ceil(j / k);
+                        origRow = min(origRow, rows);
+                        origCol = min(origCol, cols);
+                        zoomedImg(i, j, :) = app.OriginalImage(origRow, origCol, :);
+                    end
+                end
+                
+                app.EnhancedImage = zoomedImg;
+                imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+                title(app.UIAxes_2, sprintf('Enhanced (Zero-Order Zoom: %.2fx)', k));
+            catch ME
+                uialert(app.UIFigure, ME.message, 'Error During Zero-Order Zoom');
+            end
+        end
+
+        % Button pushed function: FlipRotateButton
+        function FlipRotateButtonPushed(app, event)
+            if isempty(app.EnhancedImage)
+                uialert(app.UIFigure, 'Please load an image first!', 'Warning');
+                return;
+            end
+            
+            try
+                current_img = app.EnhancedImage;
+                
+                % Flip horizontally and rotate 90 degrees clockwise
+                flippedImg = flip(current_img, 2);  % Horizontal flip
+                rotatedImg = rot90(flippedImg, -1); % Rotate 90 degrees clockwise
+                
+                app.EnhancedImage = rotatedImg;
+                imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+                title(app.UIAxes_2, 'Enhanced (Flipped + Rotated 90°)');
+            catch ME
+                uialert(app.UIFigure, ME.message, 'Error During Flip/Rotate');
+            end
+        end
+
+        % Button pushed function: TransposeNegativeButton
+        function TransposeNegativeButtonPushed(app, event)
+            if isempty(app.EnhancedImage)
+                uialert(app.UIFigure, 'Please load an image first!', 'Warning');
+                return;
+            end
+            
+            try
+                current_img = app.EnhancedImage;
+                [~, ~, channels] = size(current_img);
+                
+                % Transpose the image
+                if channels == 3
+                    transposedImg = permute(current_img, [2 1 3]);
+                else
+                    transposedImg = current_img';
+                end
+                
+                % Apply negative transformation (invert colors)
+                if isa(transposedImg, 'uint8')
+                    negativeImg = 255 - transposedImg;
+                elseif isa(transposedImg, 'uint16')
+                    negativeImg = 65535 - transposedImg;
+                else
+                    negativeImg = 1 - transposedImg;
+                end
+                
+                app.EnhancedImage = negativeImg;
+                imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+                title(app.UIAxes_2, 'Enhanced (Transposed + Negative)');
+            catch ME
+                uialert(app.UIFigure, ME.message, 'Error During Transpose/Negative');
+            end
+        end
+
+        % Button pushed function: NoiseRemovalButton (Median Filter)
+        function NoiseRemovalButtonPushed(app, event)
+            if isempty(app.EnhancedImage)
+                uialert(app.UIFigure, 'Please load an image first!', 'Warning');
+                return;
+            end
+            
+            try
+                current_img = app.EnhancedImage;
+                [~, ~, channels] = size(current_img);
+                
+                % Apply median filter for noise removal (3x3 window)
+                if channels == 3
+                    % Process each color channel separately
+                    denoisedImg = zeros(size(current_img), class(current_img));
+                    for c = 1:channels
+                        denoisedImg(:,:,c) = medfilt2(current_img(:,:,c), [3 3]);
+                    end
+                else
+                    denoisedImg = medfilt2(current_img, [3 3]);
+                end
+                
+                app.EnhancedImage = denoisedImg;
+                imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+                title(app.UIAxes_2, 'Enhanced (Noise Removed - Median Filter)');
+            catch ME
+                uialert(app.UIFigure, ME.message, 'Error During Noise Removal');
+            end
+        end
+
+        % Value changed function: BrightnessSlider (Logarithmic Transform)
+        function BrightnessSliderValueChanged(app, event)
+            if isempty(app.OriginalImage)
+                return;
+            end
+            
+            try
+                c = app.BrightnessSlider.Value;
+                
+                % Convert to double for processing
+                current_img = im2double(app.OriginalImage);
+                
+                % Logarithmic intensity transformation: s = c * log(1 + r)
+                % c is the scaling constant from slider
+                logTransformed = c * log(1 + current_img);
+                
+                % Normalize to [0, 1] range (with protection against division by zero)
+                maxVal = max(logTransformed(:));
+                if maxVal > 0
+                    logTransformed = logTransformed / maxVal;
+                end
+                
+                % Convert back to uint8
+                app.EnhancedImage = im2uint8(logTransformed);
+                imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+                title(app.UIAxes_2, sprintf('Enhanced (Log Transform c=%.2f)', c));
+            catch ME
+                uialert(app.UIFigure, ME.message, 'Error During Brightness Adjustment');
+            end
+        end
     end
 
     % Component initialization
@@ -190,8 +385,8 @@
             % Create UIFigure and hide until all components are created
             app.UIFigure = uifigure('Visible', 'off');
             app.UIFigure.Color = [0.149 0.549 0.8667];
-            app.UIFigure.Position = [100 100 888 480];
-            app.UIFigure.Name = 'MATLAB App';
+            app.UIFigure.Position = [100 100 1000 520];
+            app.UIFigure.Name = 'Image Processing App';
             app.UIFigure.Theme = 'light';
 
             % Create UIAxes
@@ -229,6 +424,7 @@
 
             % Create SaveButton
             app.SaveButton = uibutton(app.UIFigure, 'push');
+            app.SaveButton.ButtonPushedFcn = createCallbackFcn(app, @SaveButtonPushed, true);
             app.SaveButton.FontWeight = 'bold';
             app.SaveButton.Position = [597 405 184 55];
             app.SaveButton.Text = 'Save';
@@ -265,6 +461,72 @@
             app.IntensitylevelSlicingButton.FontWeight = 'bold';
             app.IntensitylevelSlicingButton.Position = [54 43 153 52];
             app.IntensitylevelSlicingButton.Text = 'Intensity-level Slicing';
+
+            % Create L1_EditFieldLabel
+            app.L1_EditFieldLabel = uilabel(app.UIFigure);
+            app.L1_EditFieldLabel.HorizontalAlignment = 'right';
+            app.L1_EditFieldLabel.FontWeight = 'bold';
+            app.L1_EditFieldLabel.Position = [220 58 20 22];
+            app.L1_EditFieldLabel.Text = 'L1';
+
+            % Create L1_EditField
+            app.L1_EditField = uieditfield(app.UIFigure, 'numeric');
+            app.L1_EditField.Position = [250 58 40 22];
+            app.L1_EditField.Value = 100;
+
+            % Create L2_EditFieldLabel
+            app.L2_EditFieldLabel = uilabel(app.UIFigure);
+            app.L2_EditFieldLabel.HorizontalAlignment = 'right';
+            app.L2_EditFieldLabel.FontWeight = 'bold';
+            app.L2_EditFieldLabel.Position = [300 58 20 22];
+            app.L2_EditFieldLabel.Text = 'L2';
+
+            % Create L2_EditField
+            app.L2_EditField = uieditfield(app.UIFigure, 'numeric');
+            app.L2_EditField.Position = [330 58 40 22];
+            app.L2_EditField.Value = 200;
+
+            % Create ZeroOrderZoomButton
+            app.ZeroOrderZoomButton = uibutton(app.UIFigure, 'push');
+            app.ZeroOrderZoomButton.ButtonPushedFcn = createCallbackFcn(app, @ZeroOrderZoomButtonPushed, true);
+            app.ZeroOrderZoomButton.FontWeight = 'bold';
+            app.ZeroOrderZoomButton.Position = [806 123 153 52];
+            app.ZeroOrderZoomButton.Text = 'Zero Order Zoom';
+
+            % Create FlipRotateButton
+            app.FlipRotateButton = uibutton(app.UIFigure, 'push');
+            app.FlipRotateButton.ButtonPushedFcn = createCallbackFcn(app, @FlipRotateButtonPushed, true);
+            app.FlipRotateButton.FontWeight = 'bold';
+            app.FlipRotateButton.Position = [380 43 153 52];
+            app.FlipRotateButton.Text = 'Flip + Rotate';
+
+            % Create TransposeNegativeButton
+            app.TransposeNegativeButton = uibutton(app.UIFigure, 'push');
+            app.TransposeNegativeButton.ButtonPushedFcn = createCallbackFcn(app, @TransposeNegativeButtonPushed, true);
+            app.TransposeNegativeButton.FontWeight = 'bold';
+            app.TransposeNegativeButton.Position = [540 43 153 52];
+            app.TransposeNegativeButton.Text = 'Transpose + Negative';
+
+            % Create NoiseRemovalButton
+            app.NoiseRemovalButton = uibutton(app.UIFigure, 'push');
+            app.NoiseRemovalButton.ButtonPushedFcn = createCallbackFcn(app, @NoiseRemovalButtonPushed, true);
+            app.NoiseRemovalButton.FontWeight = 'bold';
+            app.NoiseRemovalButton.Position = [700 43 153 52];
+            app.NoiseRemovalButton.Text = 'Noise Removal';
+
+            % Create BrightnessSliderLabel
+            app.BrightnessSliderLabel = uilabel(app.UIFigure);
+            app.BrightnessSliderLabel.HorizontalAlignment = 'right';
+            app.BrightnessSliderLabel.FontWeight = 'bold';
+            app.BrightnessSliderLabel.Position = [29 370 120 22];
+            app.BrightnessSliderLabel.Text = 'Brightness (Log)';
+
+            % Create BrightnessSlider
+            app.BrightnessSlider = uislider(app.UIFigure);
+            app.BrightnessSlider.Limits = [0.1 3];
+            app.BrightnessSlider.ValueChangedFcn = createCallbackFcn(app, @BrightnessSliderValueChanged, true);
+            app.BrightnessSlider.Position = [29 360 120 3];
+            app.BrightnessSlider.Value = 1;
 
             % Show the figure after all components are created
             app.UIFigure.Visible = 'on';
