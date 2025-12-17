@@ -76,7 +76,7 @@
 
         % Button pushed function: K_Zoom_Button
         function K_Zoom_ButtonPushed(app, event)
-           if isempty(app. OriginalImage)
+           if isempty(app.OriginalImage)
         uialert(app.UIFigure, 'Please load an image first!', 'Warning');
         return;
     end
@@ -92,12 +92,12 @@
     
     try
         % Zoom the original image by factor k
-        zoomedImg = imresize(app. OriginalImage, k, 'nearest');
+        zoomedImg = imresize(app.OriginalImage, k, 'nearest');
         
         % Store and display the zoomed image
         app.EnhancedImage = zoomedImg;
-        imshow(app. EnhancedImage, 'Parent', app.UIAxes_2);
-        title(app.UIAxes_2, sprintf('Enhanced (K-Zoom: %. 2fx)', k));
+        imshow(app.EnhancedImage, 'Parent', app.UIAxes_2);
+        title(app.UIAxes_2, sprintf('Enhanced (K-Zoom: %.2fx)', k));
         
     catch ME
         uialert(app.UIFigure, ME.message, 'Error During Zoom');
